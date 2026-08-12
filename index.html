@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart GradeIQ Pro</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+     <div class="brand">
+  <div class="logo-wrapper">
+    <!-- Inline SVG Logo Icon -->
+    <svg class="app-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
+      <path d="M6 12v5c3 3 9 3 12 0v-5"/>
+    </svg>
+  </div>
+  <h2>GradeIQ <span>Pro</span></h2>
+</div>
+      <nav>
+        <button class="nav-btn active" data-page="calculator">
+          <span class="icon">📊</span> Course Calculator
+        </button>
+        <button class="nav-btn" data-page="target-planner">
+          <span class="icon">🎯</span> Target GPA Planner
+        </button>
+        <button class="nav-btn" data-page="analytics">
+          <span class="icon">📈</span> Analytics & Insights
+        </button>
+        <button class="nav-btn" data-page="scale">
+          <span class="icon">⚙️</span> Scale & Settings
+        </button>
+      </nav>
+      <div class="sidebar-footer">
+        <button id="clearDataBtn" class="danger-outline-btn">Clear All Data</button>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="content">
+      
+      <!-- PAGE 1: CALCULATOR -->
+      <section id="calculator" class="page active">
+        <header class="page-header">
+          <div>
+            <h1>Course & Grade Calculator</h1>
+            <p>Add your coursework across semesters to track real-time weighted averages and GPA.</p>
+          </div>
+          <div class="header-actions">
+            <button id="exportBtn" class="secondary-btn">Export Data</button>
+            <button id="importBtn" class="secondary-btn">Import Data</button>
+            <input type="file" id="importFile" accept=".json" style="display: none;">
+          </div>
+        </header>
+
+        <!-- Quick Summary Bar -->
+        <div class="summary-strip">
+          <div class="strip-item">
+            <span class="label">Total Cumulative GPA</span>
+            <span id="stripGPA" class="value">0.00</span>
+          </div>
+          <div class="strip-item">
+            <span class="label">Overall Average</span>
+            <span id="stripAvg" class="value">0.0%</span>
+          </div>
+          <div class="strip-item">
+            <span class="label">Earned Credits</span>
+            <span id="stripCredits" class="value">0</span>
+          </div>
+          <div class="strip-item">
+            <span class="label">Academic Standing</span>
+            <span id="stripStanding" class="value badge">-</span>
+          </div>
+        </div>
+
+        <!-- Controls Toolbar -->
+        <div class="toolbar">
+          <div class="filter-group">
+            <label for="termFilter">Filter Term:</label>
+            <select id="termFilter">
+              <option value="All">All Terms</option>
+              <option value="Spring 2026">Spring 2026</option>
+              <option value="Summer 2026">Summer 2026</option>
+              <option value="Fall 2026">Fall 2026</option>
+              <option value="Winter 2026">Winter 2026</option>
+            </select>
+          </div>
+          <button id="addCourseBtn" class="primary-btn">+ Add New Course</button>
+        </div>
+
+        <!-- Course Table -->
+        <div class="table-container">
+          <table id="gradeTable">
+            <thead>
+              <tr>
+                <th>Course Name</th>
+                <th>Category</th>
+                <th>Semester / Term</th>
+                <th>Score (%)</th>
+                <th>Credits</th>
+                <th>Grade</th>
+                <th>Points</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="courseRows">
+              <!-- Dynamic Rows Inserted via JS -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- PAGE 2: TARGET GPA PLANNER -->
+      <section id="target-planner" class="page">
+        <header class="page-header">
+          <div>
+            <h1>Target GPA Planner</h1>
+            <p>Determine what grades you need in remaining credits to achieve your target goal.</p>
+          </div>
+        </header>
+
+        <div class="planner-grid">
+          <div class="card form-card">
+            <h3>Goal Parameters</h3>
+            <div class="form-group">
+              <label>Current Cumulative GPA</label>
+              <input type="number" id="planCurrentGPA" step="0.01" readonly>
+            </div>
+            <div class="form-group">
+              <label>Current Completed Credits</label>
+              <input type="number" id="planCurrentCredits" readonly>
+            </div>
+            <div class="form-group">
+              <label for="planTargetGPA">Target Cumulative GPA</label>
+              <input type="number" id="planTargetGPA" step="0.01" min="0" max="4.0" value="3.50">
+            </div>
+            <div class="form-group">
+              <label for="planRemainingCredits">Remaining Credit Hours</label>
+              <input type="number" id="planRemainingCredits" min="1" max="120" value="15">
+            </div>
+            <button id="calculateTargetBtn" class="primary-btn full-width">Calculate Goal</button>
+          </div>
+
+          <div class="card result-card">
+            <h3>Smart Target Analysis</h3>
+            <div id="targetOutput" class="target-output">
+              <p class="placeholder-text">Enter your target criteria and click calculate to view results.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PAGE 3: ANALYTICS & INSIGHTS -->
+      <section id="analytics" class="page">
+        <header class="page-header">
+          <div>
+            <h1>Academic Performance Analytics</h1>
+            <p>Detailed breakdown of your grade distribution and credit weighting.</p>
+          </div>
+        </header>
+
+        <div class="stats-grid">
+          <div class="card">
+            <h3>Cumulative Weighted GPA</h3>
+            <p id="anaGPA" class="stat-number">0.00</p>
+            <span class="stat-subtext">Standard 4.0 scale</span>
+          </div>
+          <div class="card">
+            <h3>Weighted Score Average</h3>
+            <p id="anaAvg" class="stat-number">0.0%</p>
+            <span class="stat-subtext">Across completed coursework</span>
+          </div>
+          <div class="card">
+            <h3>Earned Credits</h3>
+            <p id="anaCredits" class="stat-number">0</p>
+            <span class="stat-subtext">Total passing credit hours</span>
+          </div>
+        </div>
+
+        <div class="analytics-layout">
+          <div class="card">
+            <h3>Grade Breakdown</h3>
+            <div id="gradeDistribution" class="distribution-bars"></div>
+          </div>
+
+          <div class="card">
+            <h3>Smart Recommendations</h3>
+            <p id="smartInsightText" class="insight-text">Add coursework inputs to compute feedback.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- PAGE 4: GRADING SCALE & SETTINGS -->
+      <section id="scale" class="page">
+        <header class="page-header">
+          <div>
+            <h1>Scale & Settings</h1>
+            <p>Customize system behavior, choose grading standards, and manage your preferences.</p>
+          </div>
+        </header>
+
+        <div class="settings-grid">
+          <!-- Configuration Card -->
+          <div class="card">
+            <h3>System Preferences</h3>
+            <form id="settingsForm" onsubmit="return false;">
+              <div class="form-group">
+                <label for="scaleType">Grading System Scale</label>
+                <select id="scaleType">
+                  <option value="4.0" selected>4.0 Scale (Standard US)</option>
+                  <option value="5.0">5.0 Scale (Weighted / Honors)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="passingGrade">Minimum Passing Grade (%)</label>
+                <input type="number" id="passingGrade" value="60" min="0" max="100">
+              </div>
+
+              <div class="form-group">
+                <label for="themeSelect">Appearance Mode</label>
+                <select id="themeSelect">
+                  <option value="dark" selected>Dark Mode (Default)</option>
+                  <option value="light">Light Mode</option>
+                  <option value="system">Follow System</option>
+                </select>
+              </div>
+
+              <div class="form-group checkbox-group">
+                <label class="toggle-label">
+                  <input type="checkbox" id="autoSaveToggle" checked>
+                  <span>Auto-save changes to LocalStorage</span>
+                </label>
+              </div>
+
+              <button type="button" id="saveSettingsBtn" class="primary-btn">Save Settings</button>
+            </form>
+          </div>
+
+          <!-- Active Grading Scale Table -->
+          <div class="card">
+            <h3>Active Conversion Scale</h3>
+            <table class="scale-table">
+              <thead>
+                <tr>
+                  <th>Letter</th>
+                  <th>Range (%)</th>
+                  <th>GPA Value</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="scaleTableBody">
+                <tr><td><span class="grade-badge A">A</span></td><td>90.0% – 100.0%</td><td>4.00</td><td>Outstanding</td></tr>
+                <tr><td><span class="grade-badge B">B</span></td><td>80.0% – 89.9%</td><td>3.00</td><td>Above Average</td></tr>
+                <tr><td><span class="grade-badge C">C</span></td><td>70.0% – 79.9%</td><td>2.00</td><td>Satisfactory</td></tr>
+                <tr><td><span class="grade-badge D">D</span></td><td>60.0% – 69.9%</td><td>1.00</td><td>Passing</td></tr>
+                <tr><td><span class="grade-badge F">F</span></td><td>0.0% – 59.9%</td><td>0.00</td><td>Non-Passing</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+    <script src="script.js"></script>
+  </body>
+</html>
