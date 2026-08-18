@@ -1,3 +1,73 @@
+function showNotice(message, level = "error") {
+  let host = document.getElementById("noticeHost");
+  if (!host) {
+    host = document.createElement("div");
+    host.id = "noticeHost";
+    host.className = "notice-host";
+    host.setAttribute("role", "status");
+    host.setAttribute("aria-live", "polite");
+    document.body.appendChild(host);
+  }
+
+  const notice = document.createElement("div");
+  notice.className = `notice notice-${level}`;
+  notice.textContent = message;
+  host.appendChild(notice);
+
+  window.setTimeout(() => notice.remove(), 6000);
+}
+
+function reportError(message, error) {
+  console.error(`[GradeIQ] ${message}`, error);
+  showNotice(message, "error");
+}
+
+function requireElement(id) {
+  const el = document.getElementById(id);
+  if (!el) console.error(`[GradeIQ] Missing required element #${id}`);
+  return el;
+}
+
+function setText(id, value) {
+  const el = requireElement(id);
+  if (el) el.textContent = value;
+}
+
+// Drops entries that cannot be interpreted as a course and reports how many
+// were rejected, instead of letting malformed data reach the calculations.
+function sanitizeCourses(input, onReject) {
+  if (!Array.isArray(input)) throw new TypeError("Course data must be an array.");
+
+  let rejected = 0;
+  const sanitized = [];
+
+  input.forEach((entry, index) => {
+    if (!entry || typeof entry !== "object") {
+      rejected++;
+      return;
+    }
+
+    const score = Number(entry.score);
+    const credits = Number(entry.credits);
+    if (!Number.isFinite(score) || !Number.isFinite(credits)) {
+      rejected++;
+      return;
+    }
+
+    sanitized.push({
+      id: entry.id != null ? String(entry.id) : `${Date.now()}-${index}`,
+      name: entry.name != null ? String(entry.name) : "Untitled Course",
+      category: entry.category != null ? String(entry.category) : "Core",
+      term: entry.term != null ? String(entry.term) : "Fall 2026",
+      score: Math.min(Math.max(score, 0), 100),
+      credits: Math.max(credits, 0)
+    });
+  });
+
+  if (rejected > 0 && onReject) onReject(rejected);
+  return sanitized;
+}
+
 function initGradeIQ() {
   // Initial default course list
   const defaultCourses = [
@@ -49,16 +119,35 @@ function initGradeIQ() {
   window.addEventListener("resize", updateResponsiveState);
 
   function getStoredCourses() {
+    let stored;
     try {
-      const stored = localStorage.getItem("gradeiq-courses");
-      return stored ? JSON.parse(stored) : null;
-    } catch {
+      stored = localStorage.getItem("gradeiq-courses");
+    } catch (error) {
+      reportError("Saved courses could not be read (storage is unavailable). Starting from defaults.", error);
+      return null;
+    }
+
+    if (!stored) return null;
+
+    try {
+      return sanitizeCourses(JSON.parse(stored), (rejected) =>
+        showNotice(`${rejected} saved course(s) were malformed and have been skipped.`, "warning")
+      );
+    } catch (error) {
+      reportError("Saved course data is corrupted and was ignored. Starting from defaults.", error);
       return null;
     }
   }
 
   function saveState() {
-    localStorage.setItem("gradeiq-courses", JSON.stringify(courses));
+    try {
+      localStorage.setItem("gradeiq-courses", JSON.stringify(courses));
+    } catch (error) {
+      reportError("Changes could not be saved to this browser. They will be lost when you reload.", error);
+    }
+
+    // Analytics must refresh even when persistence fails, so the UI never
+    // shows stale numbers for the data currently in memory.
     updateAnalytics();
     syncPlannerInputs();
   }
@@ -173,8 +262,8 @@ function initGradeIQ() {
           item.score = parseFloat(e.target.value) || 0;
           const tr = e.target.closest("tr");
           const info = getGradeInfo(item.score);
-          const badge = tr.querySelector(".grade-badge");
-          const points = tr.querySelector(".points-val");
+          const badge = tr?.querySelector(".grade-badge");
+          const points = tr?.querySelector(".points-val");
           if (badge) {
             badge.textContent = info.grade;
             badge.className = `grade-badge ${info.grade}`;
@@ -222,26 +311,28 @@ function initGradeIQ() {
     const cumulativeGPA = totalCredits > 0 ? totalWeightedGPA / totalCredits : 0;
 
     // Summary Strip
-    document.getElementById("stripGPA").textContent = cumulativeGPA.toFixed(2);
-    document.getElementById("stripAvg").textContent = `${avgScore.toFixed(1)}%`;
-    document.getElementById("stripCredits").textContent = totalCredits;
+    setText("stripGPA", cumulativeGPA.toFixed(2));
+    setText("stripAvg", `${avgScore.toFixed(1)}%`);
+    setText("stripCredits", totalCredits);
 
-    const standingEl = document.getElementById("stripStanding");
-    if (cumulativeGPA >= 3.5) {
-      standingEl.textContent = "Honors";
-      standingEl.style.color = "var(--success)";
-    } else if (cumulativeGPA >= 2.0) {
-      standingEl.textContent = "Good Standing";
-      standingEl.style.color = "var(--accent)";
-    } else {
-      standingEl.textContent = "At Risk";
-      standingEl.style.color = "var(--danger)";
+    const standingEl = requireElement("stripStanding");
+    if (standingEl) {
+      if (cumulativeGPA >= 3.5) {
+        standingEl.textContent = "Honors";
+        standingEl.style.color = "var(--success)";
+      } else if (cumulativeGPA >= 2.0) {
+        standingEl.textContent = "Good Standing";
+        standingEl.style.color = "var(--accent)";
+      } else {
+        standingEl.textContent = "At Risk";
+        standingEl.style.color = "var(--danger)";
+      }
     }
 
     // Analytics Tab
-    document.getElementById("anaGPA").textContent = cumulativeGPA.toFixed(2);
-    document.getElementById("anaAvg").textContent = `${avgScore.toFixed(1)}%`;
-    document.getElementById("anaCredits").textContent = totalCredits;
+    setText("anaGPA", cumulativeGPA.toFixed(2));
+    setText("anaAvg", `${avgScore.toFixed(1)}%`);
+    setText("anaCredits", totalCredits);
 
     const distContainer = document.getElementById("gradeDistribution");
     if (distContainer) {
@@ -286,18 +377,33 @@ function initGradeIQ() {
     });
 
     const currentGPA = totalCredits > 0 ? totalWeightedGPA / totalCredits : 0;
-    document.getElementById("planCurrentGPA").value = currentGPA.toFixed(2);
-    document.getElementById("planCurrentCredits").value = totalCredits;
+    const gpaInput = requireElement("planCurrentGPA");
+    const creditsInput = requireElement("planCurrentCredits");
+    if (gpaInput) gpaInput.value = currentGPA.toFixed(2);
+    if (creditsInput) creditsInput.value = totalCredits;
   }
 
   const calcTargetBtn = document.getElementById("calculateTargetBtn");
   if (calcTargetBtn) {
     calcTargetBtn.addEventListener("click", () => {
-      const curGPA = parseFloat(document.getElementById("planCurrentGPA").value) || 0;
-      const curCredits = parseFloat(document.getElementById("planCurrentCredits").value) || 0;
-      const targetGPA = parseFloat(document.getElementById("planTargetGPA").value) || 0;
-      const remCredits = parseFloat(document.getElementById("planRemainingCredits").value) || 0;
-      const outputEl = document.getElementById("targetOutput");
+      const inputs = [
+        "planCurrentGPA",
+        "planCurrentCredits",
+        "planTargetGPA",
+        "planRemainingCredits",
+        "targetOutput"
+      ].map(requireElement);
+
+      if (inputs.some((el) => !el)) {
+        showNotice("The planner form is incomplete, so the goal could not be calculated.", "error");
+        return;
+      }
+
+      const [curGPAEl, curCreditsEl, targetGPAEl, remCreditsEl, outputEl] = inputs;
+      const curGPA = parseFloat(curGPAEl.value) || 0;
+      const curCredits = parseFloat(curCreditsEl.value) || 0;
+      const targetGPA = parseFloat(targetGPAEl.value) || 0;
+      const remCredits = parseFloat(remCreditsEl.value) || 0;
 
       if (remCredits <= 0) {
         outputEl.innerHTML = `<p style="color:var(--danger)">Remaining credits must be greater than 0.</p>`;
@@ -360,12 +466,21 @@ function initGradeIQ() {
 
   if (exportBtn) {
     exportBtn.addEventListener("click", () => {
-      const blob = new Blob([JSON.stringify(courses, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "gradeiq-data.json";
-      a.click();
+      let url;
+      try {
+        const blob = new Blob([JSON.stringify(courses, null, 2)], { type: "application/json" });
+        url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "gradeiq-data.json";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } catch (error) {
+        reportError("Export failed: the course data could not be downloaded.", error);
+      } finally {
+        if (url) URL.revokeObjectURL(url);
+      }
     });
   }
 
@@ -376,20 +491,38 @@ function initGradeIQ() {
       if (!file) return;
 
       const reader = new FileReader();
+
       reader.onload = (evt) => {
+        let imported;
         try {
-          const imported = JSON.parse(evt.target.result);
-          if (Array.isArray(imported)) {
-            courses = imported;
-            saveState();
-            renderTable();
-            alert("Course data imported successfully!");
-          }
-        } catch (err) {
-          alert("Invalid JSON file format.");
+          imported = sanitizeCourses(JSON.parse(evt.target.result), (rejected) =>
+            showNotice(`${rejected} imported course(s) were malformed and have been skipped.`, "warning")
+          );
+        } catch (error) {
+          reportError(
+            `Import failed: ${file.name} is not a valid list of courses.`,
+            error
+          );
+          return;
         }
+
+        courses = imported;
+        saveState();
+        renderTable();
+        showNotice(`Imported ${imported.length} course(s) successfully.`, "success");
       };
-      reader.readAsText(file);
+
+      reader.onerror = () => reportError(`Import failed: ${file.name} could not be read.`, reader.error);
+      reader.onabort = () => showNotice(`Import of ${file.name} was cancelled.`, "warning");
+
+      // Allow re-importing the same file after a failure.
+      importFile.value = "";
+
+      try {
+        reader.readAsText(file);
+      } catch (error) {
+        reportError(`Import failed: ${file.name} could not be opened.`, error);
+      }
     });
   }
 
@@ -398,8 +531,23 @@ function initGradeIQ() {
   updateAnalytics();
 }
 
+function bootGradeIQ() {
+  try {
+    initGradeIQ();
+  } catch (error) {
+    reportError("GradeIQ failed to start. Reload the page to try again.", error);
+  }
+}
+
+window.addEventListener("error", (event) =>
+  console.error("[GradeIQ] Uncaught error", event.error || event.message)
+);
+window.addEventListener("unhandledrejection", (event) =>
+  console.error("[GradeIQ] Unhandled promise rejection", event.reason)
+);
+
 if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", initGradeIQ);
+  document.addEventListener("DOMContentLoaded", bootGradeIQ);
 } else {
-  initGradeIQ();
+  bootGradeIQ();
 }
