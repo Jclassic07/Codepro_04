@@ -1,3 +1,15 @@
+const {
+  categoryOptions,
+  termOptions,
+  getGradeInfo,
+  setText,
+  getNumberValue,
+  renderSelectOptions,
+  computeCourseTotals,
+  getStoredCourses,
+  saveStoredCourses
+} = window.GradeIQUtils;
+
 function initGradeIQ() {
   // Initial default course list
   const defaultCourses = [
@@ -48,27 +60,10 @@ function initGradeIQ() {
   updateResponsiveState();
   window.addEventListener("resize", updateResponsiveState);
 
-  function getStoredCourses() {
-    try {
-      const stored = localStorage.getItem("gradeiq-courses");
-      return stored ? JSON.parse(stored) : null;
-    } catch {
-      return null;
-    }
-  }
-
   function saveState() {
-    localStorage.setItem("gradeiq-courses", JSON.stringify(courses));
+    saveStoredCourses(courses);
     updateAnalytics();
     syncPlannerInputs();
-  }
-
-  function getGradeInfo(score) {
-    if (score >= 90) return { grade: "A", gpa: 4.0 };
-    if (score >= 80) return { grade: "B", gpa: 3.0 };
-    if (score >= 70) return { grade: "C", gpa: 2.0 };
-    if (score >= 60) return { grade: "D", gpa: 1.0 };
-    return { grade: "F", gpa: 0.0 };
   }
 
   function updateTermFilterOptions() {
@@ -112,19 +107,12 @@ function initGradeIQ() {
               <td><input class="course-name" data-id="${course.id}" value="${course.name}" /></td>
               <td>
                 <select class="course-category" data-id="${course.id}">
-                  <option${course.category === "Core" ? " selected" : ""}>Core</option>
-                  <option${course.category === "Major" ? " selected" : ""}>Major</option>
-                  <option${course.category === "Lab" ? " selected" : ""}>Lab</option>
-                  <option${course.category === "Elective" ? " selected" : ""}>Elective</option>
+                  ${renderSelectOptions(categoryOptions, course.category)}
                 </select>
               </td>
               <td>
                 <select class="course-term" data-id="${course.id}">
-                  <option${course.term === "Fall 2025" ? " selected" : ""}>Fall 2025</option>
-                  <option${course.term === "Spring 2026" ? " selected" : ""}>Spring 2026</option>
-                  <option${course.term === "Summer 2026" ? " selected" : ""}>Summer 2026</option>
-                  <option${course.term === "Fall 2026" ? " selected" : ""}>Fall 2026</option>
-                  <option${course.term === "Winter 2026" ? " selected" : ""}>Winter 2026</option>
+                  ${renderSelectOptions(termOptions, course.term)}
                 </select>
               </td>
               <td><input type="number" min="0" max="100" class="course-score" data-id="${course.id}" value="${course.score}" /></td>
@@ -145,33 +133,34 @@ function initGradeIQ() {
   }
 
   function attachTableEvents() {
-    document.querySelectorAll(".course-name").forEach((input) => {
-      input.addEventListener("input", (e) => {
-        const item = courses.find((c) => c.id === e.target.dataset.id);
-        if (item) { item.name = e.target.value; saveState(); }
-      });
-    });
-
-    document.querySelectorAll(".course-category").forEach((select) => {
-      select.addEventListener("change", (e) => {
-        const item = courses.find((c) => c.id === e.target.dataset.id);
-        if (item) { item.category = e.target.value; saveState(); }
-      });
-    });
-
-    document.querySelectorAll(".course-term").forEach((select) => {
-      select.addEventListener("change", (e) => {
-        const item = courses.find((c) => c.id === e.target.dataset.id);
-        if (item) { item.term = e.target.value; saveState(); }
-      });
-    });
-
-    document.querySelectorAll(".course-score").forEach((input) => {
-      input.addEventListener("input", (e) => {
-        const item = courses.find((c) => c.id === e.target.dataset.id);
-        if (item) {
-          item.score = parseFloat(e.target.value) || 0;
-          const tr = e.target.closest("tr");
+    const inputConfigs = [
+      {
+        selector: ".course-name",
+        event: "input",
+        apply: (item, target) => {
+          item.name = target.value;
+        }
+      },
+      {
+        selector: ".course-category",
+        event: "change",
+        apply: (item, target) => {
+          item.category = target.value;
+        }
+      },
+      {
+        selector: ".course-term",
+        event: "change",
+        apply: (item, target) => {
+          item.term = target.value;
+        }
+      },
+      {
+        selector: ".course-score",
+        event: "input",
+        apply: (item, target) => {
+          item.score = parseFloat(target.value) || 0;
+          const tr = target.closest("tr");
           const info = getGradeInfo(item.score);
           const badge = tr.querySelector(".grade-badge");
           const points = tr.querySelector(".points-val");
@@ -180,18 +169,27 @@ function initGradeIQ() {
             badge.className = `grade-badge ${info.grade}`;
           }
           if (points) points.textContent = info.gpa.toFixed(1);
-          saveState();
         }
-      });
-    });
+      },
+      {
+        selector: ".course-credits",
+        event: "input",
+        apply: (item, target) => {
+          item.credits = parseFloat(target.value) || 0;
+        }
+      }
+    ];
 
-    document.querySelectorAll(".course-credits").forEach((input) => {
-      input.addEventListener("input", (e) => {
-        const item = courses.find((c) => c.id === e.target.dataset.id);
-        if (item) {
-          item.credits = parseFloat(e.target.value) || 0;
-          saveState();
-        }
+    inputConfigs.forEach((config) => {
+      document.querySelectorAll(config.selector).forEach((input) => {
+        input.addEventListener(config.event, (e) => {
+          const target = e.target;
+          const item = courses.find((c) => c.id === target.dataset.id);
+          if (item) {
+            config.apply(item, target);
+            saveState();
+          }
+        });
       });
     });
 
@@ -205,26 +203,15 @@ function initGradeIQ() {
   }
 
   function updateAnalytics() {
-    let totalWeightedScore = 0;
-    let totalWeightedGPA = 0;
-    let totalCredits = 0;
-    const counts = { A: 0, B: 0, C: 0, D: 0, F: 0 };
-
-    courses.forEach((c) => {
-      const info = getGradeInfo(c.score);
-      totalWeightedScore += c.score * c.credits;
-      totalWeightedGPA += info.gpa * c.credits;
-      totalCredits += c.credits;
-      counts[info.grade]++;
-    });
-
-    const avgScore = totalCredits > 0 ? totalWeightedScore / totalCredits : 0;
-    const cumulativeGPA = totalCredits > 0 ? totalWeightedGPA / totalCredits : 0;
+    const { totalCredits, avgScore, cumulativeGPA, counts } =
+      computeCourseTotals(courses);
 
     // Summary Strip
-    document.getElementById("stripGPA").textContent = cumulativeGPA.toFixed(2);
-    document.getElementById("stripAvg").textContent = `${avgScore.toFixed(1)}%`;
-    document.getElementById("stripCredits").textContent = totalCredits;
+    [
+      ["stripGPA", cumulativeGPA.toFixed(2)],
+      ["stripAvg", `${avgScore.toFixed(1)}%`],
+      ["stripCredits", totalCredits]
+    ].forEach(([id, value]) => setText(id, value));
 
     const standingEl = document.getElementById("stripStanding");
     if (cumulativeGPA >= 3.5) {
@@ -239,9 +226,11 @@ function initGradeIQ() {
     }
 
     // Analytics Tab
-    document.getElementById("anaGPA").textContent = cumulativeGPA.toFixed(2);
-    document.getElementById("anaAvg").textContent = `${avgScore.toFixed(1)}%`;
-    document.getElementById("anaCredits").textContent = totalCredits;
+    [
+      ["anaGPA", cumulativeGPA.toFixed(2)],
+      ["anaAvg", `${avgScore.toFixed(1)}%`],
+      ["anaCredits", totalCredits]
+    ].forEach(([id, value]) => setText(id, value));
 
     const distContainer = document.getElementById("gradeDistribution");
     if (distContainer) {
@@ -276,27 +265,18 @@ function initGradeIQ() {
   }
 
   function syncPlannerInputs() {
-    let totalWeightedGPA = 0;
-    let totalCredits = 0;
-
-    courses.forEach((c) => {
-      const info = getGradeInfo(c.score);
-      totalWeightedGPA += info.gpa * c.credits;
-      totalCredits += c.credits;
-    });
-
-    const currentGPA = totalCredits > 0 ? totalWeightedGPA / totalCredits : 0;
-    document.getElementById("planCurrentGPA").value = currentGPA.toFixed(2);
+    const { totalCredits, cumulativeGPA } = computeCourseTotals(courses);
+    document.getElementById("planCurrentGPA").value = cumulativeGPA.toFixed(2);
     document.getElementById("planCurrentCredits").value = totalCredits;
   }
 
   const calcTargetBtn = document.getElementById("calculateTargetBtn");
   if (calcTargetBtn) {
     calcTargetBtn.addEventListener("click", () => {
-      const curGPA = parseFloat(document.getElementById("planCurrentGPA").value) || 0;
-      const curCredits = parseFloat(document.getElementById("planCurrentCredits").value) || 0;
-      const targetGPA = parseFloat(document.getElementById("planTargetGPA").value) || 0;
-      const remCredits = parseFloat(document.getElementById("planRemainingCredits").value) || 0;
+      const curGPA = getNumberValue("planCurrentGPA");
+      const curCredits = getNumberValue("planCurrentCredits");
+      const targetGPA = getNumberValue("planTargetGPA");
+      const remCredits = getNumberValue("planRemainingCredits");
       const outputEl = document.getElementById("targetOutput");
 
       if (remCredits <= 0) {
