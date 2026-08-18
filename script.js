@@ -5,6 +5,9 @@ function initGradeIQ() {
     { id: "2", name: "Computer Science", category: "Major", term: "Fall 2026", score: 94, credits: 4 },
     { id: "3", name: "Physics Lab", category: "Lab", term: "Spring 2026", score: 72, credits: 2 }
   ];
+  const categoryOptions = ["Core", "Major", "Lab", "Elective"];
+  const termOptions = ["Fall 2025", "Spring 2026", "Summer 2026", "Fall 2026", "Winter 2026"];
+  const maxCourseNameLength = 200;
 
   let courses = getStoredCourses() || defaultCourses;
 
@@ -18,6 +21,7 @@ function initGradeIQ() {
   const exportBtn = document.getElementById("exportBtn");
   const importBtn = document.getElementById("importBtn");
   const importFile = document.getElementById("importFile");
+  const settingsForm = document.getElementById("settingsForm");
 
   // Multi-Page Navigation
   navBtns.forEach((btn) => {
@@ -48,10 +52,55 @@ function initGradeIQ() {
   updateResponsiveState();
   window.addEventListener("resize", updateResponsiveState);
 
+  function isPlainObject(value) {
+    if (value === null || typeof value !== "object") return false;
+    const prototype = Object.getPrototypeOf(value);
+    return prototype === Object.prototype || prototype === null;
+  }
+
+  function clampNumber(value, min, max, fallback) {
+    const number = Number(value);
+    return Number.isFinite(number) ? Math.min(max, Math.max(min, number)) : fallback;
+  }
+
+  function normalizeCourses(value) {
+    if (!Array.isArray(value)) return null;
+
+    const usedIds = new Set();
+    let generatedId = 0;
+    return value.reduce((normalized, entry) => {
+      if (!isPlainObject(entry)) return normalized;
+
+      let id = entry.id === undefined || entry.id === null ? "" : String(entry.id).trim();
+      if (!id || usedIds.has(id)) {
+        do {
+          generatedId += 1;
+          id = `course-${Date.now()}-${generatedId}`;
+        } while (usedIds.has(id));
+      }
+
+      const name = entry.name === undefined || entry.name === null
+        ? ""
+        : String(entry.name).trim().slice(0, maxCourseNameLength);
+      if (!name) return normalized;
+
+      usedIds.add(id);
+      normalized.push({
+        id,
+        name,
+        category: categoryOptions.includes(entry.category) ? entry.category : "Core",
+        term: termOptions.includes(entry.term) ? entry.term : "Fall 2026",
+        score: clampNumber(entry.score, 0, 100, 0),
+        credits: clampNumber(entry.credits, 0, 30, 0)
+      });
+      return normalized;
+    }, []);
+  }
+
   function getStoredCourses() {
     try {
       const stored = localStorage.getItem("gradeiq-courses");
-      return stored ? JSON.parse(stored) : null;
+      return stored ? normalizeCourses(JSON.parse(stored)) : null;
     } catch {
       return null;
     }
@@ -75,17 +124,22 @@ function initGradeIQ() {
     if (!termFilter) return;
     const selected = termFilter.value || "All";
     const terms = [...new Set(courses.map((c) => c.term))].sort();
-    termFilter.innerHTML = `
-      <option value="All">All Terms</option>
-      ${terms
-        .map(
-          (term) =>
-            `<option value="${term}" ${
-              term === selected ? "selected" : ""
-            }>${term}</option>`
-        )
-        .join("")}
-    `;
+    const hasSelectedTerm = selected === "All" || terms.includes(selected);
+    termFilter.replaceChildren();
+
+    const allOption = document.createElement("option");
+    allOption.value = "All";
+    allOption.textContent = "All Terms";
+    allOption.selected = !hasSelectedTerm || selected === "All";
+    termFilter.appendChild(allOption);
+
+    terms.forEach((term) => {
+      const option = document.createElement("option");
+      option.value = term;
+      option.textContent = term;
+      option.selected = term === selected;
+      termFilter.appendChild(option);
+    });
   }
 
   function renderTable() {
@@ -97,45 +151,106 @@ function initGradeIQ() {
         ? courses
         : courses.filter((course) => course.term === selectedTerm);
 
+    courseRows.replaceChildren();
+
     if (filteredCourses.length === 0) {
-      courseRows.innerHTML = `
-        <tr class="empty-row">
-          <td colspan="8">No courses found. Add a course to get started.</td>
-        </tr>
-      `;
+      const row = document.createElement("tr");
+      row.className = "empty-row";
+      const cell = document.createElement("td");
+      cell.colSpan = 8;
+      cell.textContent = "No courses found. Add a course to get started.";
+      row.appendChild(cell);
+      courseRows.appendChild(row);
     } else {
-      courseRows.innerHTML = filteredCourses
-        .map((course) => {
-          const info = getGradeInfo(course.score);
-          return `
-            <tr>
-              <td><input class="course-name" data-id="${course.id}" value="${course.name}" /></td>
-              <td>
-                <select class="course-category" data-id="${course.id}">
-                  <option${course.category === "Core" ? " selected" : ""}>Core</option>
-                  <option${course.category === "Major" ? " selected" : ""}>Major</option>
-                  <option${course.category === "Lab" ? " selected" : ""}>Lab</option>
-                  <option${course.category === "Elective" ? " selected" : ""}>Elective</option>
-                </select>
-              </td>
-              <td>
-                <select class="course-term" data-id="${course.id}">
-                  <option${course.term === "Fall 2025" ? " selected" : ""}>Fall 2025</option>
-                  <option${course.term === "Spring 2026" ? " selected" : ""}>Spring 2026</option>
-                  <option${course.term === "Summer 2026" ? " selected" : ""}>Summer 2026</option>
-                  <option${course.term === "Fall 2026" ? " selected" : ""}>Fall 2026</option>
-                  <option${course.term === "Winter 2026" ? " selected" : ""}>Winter 2026</option>
-                </select>
-              </td>
-              <td><input type="number" min="0" max="100" class="course-score" data-id="${course.id}" value="${course.score}" /></td>
-              <td><input type="number" min="0" step="0.5" class="course-credits" data-id="${course.id}" value="${course.credits}" /></td>
-              <td><span class="grade-badge ${info.grade}">${info.grade}</span></td>
-              <td><span class="points-val">${info.gpa.toFixed(1)}</span></td>
-              <td><button type="button" class="delete-btn" data-id="${course.id}">Delete</button></td>
-            </tr>
-          `;
-        })
-        .join("");
+      filteredCourses.forEach((course) => {
+        const info = getGradeInfo(course.score);
+        const row = document.createElement("tr");
+
+        const nameCell = document.createElement("td");
+        const nameInput = document.createElement("input");
+        nameInput.className = "course-name";
+        nameInput.setAttribute("data-id", course.id);
+        nameInput.maxLength = maxCourseNameLength;
+        nameInput.value = course.name;
+        nameCell.appendChild(nameInput);
+        row.appendChild(nameCell);
+
+        const categoryCell = document.createElement("td");
+        const categorySelect = document.createElement("select");
+        categorySelect.className = "course-category";
+        categorySelect.setAttribute("data-id", course.id);
+        categoryOptions.forEach((category) => {
+          const option = document.createElement("option");
+          option.value = category;
+          option.textContent = category;
+          option.selected = category === course.category;
+          categorySelect.appendChild(option);
+        });
+        categoryCell.appendChild(categorySelect);
+        row.appendChild(categoryCell);
+
+        const termCell = document.createElement("td");
+        const termSelect = document.createElement("select");
+        termSelect.className = "course-term";
+        termSelect.setAttribute("data-id", course.id);
+        termOptions.forEach((term) => {
+          const option = document.createElement("option");
+          option.value = term;
+          option.textContent = term;
+          option.selected = term === course.term;
+          termSelect.appendChild(option);
+        });
+        termCell.appendChild(termSelect);
+        row.appendChild(termCell);
+
+        const scoreCell = document.createElement("td");
+        const scoreInput = document.createElement("input");
+        scoreInput.type = "number";
+        scoreInput.min = "0";
+        scoreInput.max = "100";
+        scoreInput.className = "course-score";
+        scoreInput.setAttribute("data-id", course.id);
+        scoreInput.value = course.score;
+        scoreCell.appendChild(scoreInput);
+        row.appendChild(scoreCell);
+
+        const creditsCell = document.createElement("td");
+        const creditsInput = document.createElement("input");
+        creditsInput.type = "number";
+        creditsInput.min = "0";
+        creditsInput.max = "30";
+        creditsInput.step = "0.5";
+        creditsInput.className = "course-credits";
+        creditsInput.setAttribute("data-id", course.id);
+        creditsInput.value = course.credits;
+        creditsCell.appendChild(creditsInput);
+        row.appendChild(creditsCell);
+
+        const gradeCell = document.createElement("td");
+        const gradeBadge = document.createElement("span");
+        gradeBadge.className = `grade-badge ${info.grade}`;
+        gradeBadge.textContent = info.grade;
+        gradeCell.appendChild(gradeBadge);
+        row.appendChild(gradeCell);
+
+        const pointsCell = document.createElement("td");
+        const points = document.createElement("span");
+        points.className = "points-val";
+        points.textContent = info.gpa.toFixed(1);
+        pointsCell.appendChild(points);
+        row.appendChild(pointsCell);
+
+        const actionCell = document.createElement("td");
+        const deleteButton = document.createElement("button");
+        deleteButton.type = "button";
+        deleteButton.className = "delete-btn";
+        deleteButton.setAttribute("data-id", course.id);
+        deleteButton.textContent = "Delete";
+        actionCell.appendChild(deleteButton);
+        row.appendChild(actionCell);
+
+        courseRows.appendChild(row);
+      });
     }
 
     updateTermFilterOptions();
@@ -170,7 +285,8 @@ function initGradeIQ() {
       input.addEventListener("input", (e) => {
         const item = courses.find((c) => c.id === e.target.dataset.id);
         if (item) {
-          item.score = parseFloat(e.target.value) || 0;
+          item.score = clampNumber(e.target.value, 0, 100, 0);
+          e.target.value = item.score;
           const tr = e.target.closest("tr");
           const info = getGradeInfo(item.score);
           const badge = tr.querySelector(".grade-badge");
@@ -189,7 +305,8 @@ function initGradeIQ() {
       input.addEventListener("input", (e) => {
         const item = courses.find((c) => c.id === e.target.dataset.id);
         if (item) {
-          item.credits = parseFloat(e.target.value) || 0;
+          item.credits = clampNumber(e.target.value, 0, 30, 0);
+          e.target.value = item.credits;
           saveState();
         }
       });
@@ -245,19 +362,27 @@ function initGradeIQ() {
 
     const distContainer = document.getElementById("gradeDistribution");
     if (distContainer) {
-      distContainer.innerHTML = "";
+      distContainer.replaceChildren();
       Object.keys(counts).forEach((grade) => {
         const count = counts[grade];
-        const pct = courses.length > 0 ? (count / courses.length) * 100 : 0;
-        distContainer.innerHTML += `
-          <div class="dist-bar-item">
-            <strong>${grade}</strong>
-            <div class="dist-bar-bg">
-              <div class="dist-bar-fill" style="width: ${pct}%"></div>
-            </div>
-            <span>${count}</span>
-          </div>
-        `;
+        const rawPct = courses.length > 0 ? (count / courses.length) * 100 : 0;
+        const pct = Number.isFinite(rawPct) ? Math.min(100, Math.max(0, rawPct)) : 0;
+        const item = document.createElement("div");
+        item.className = "dist-bar-item";
+        const label = document.createElement("strong");
+        label.textContent = grade;
+        item.appendChild(label);
+        const barBackground = document.createElement("div");
+        barBackground.className = "dist-bar-bg";
+        const barFill = document.createElement("div");
+        barFill.className = "dist-bar-fill";
+        barFill.style.width = `${pct}%`;
+        barBackground.appendChild(barFill);
+        item.appendChild(barBackground);
+        const countLabel = document.createElement("span");
+        countLabel.textContent = count;
+        item.appendChild(countLabel);
+        distContainer.appendChild(item);
       });
     }
 
@@ -331,6 +456,10 @@ function initGradeIQ() {
     });
   }
 
+  if (settingsForm) {
+    settingsForm.addEventListener("submit", (e) => e.preventDefault());
+  }
+
   if (addCourseBtn) {
     addCourseBtn.addEventListener("click", () => {
       courses.push({
@@ -379,12 +508,15 @@ function initGradeIQ() {
       reader.onload = (evt) => {
         try {
           const imported = JSON.parse(evt.target.result);
-          if (Array.isArray(imported)) {
-            courses = imported;
-            saveState();
-            renderTable();
-            alert("Course data imported successfully!");
+          const normalized = normalizeCourses(imported);
+          if (!normalized) {
+            alert("Invalid JSON file format.");
+            return;
           }
+          courses = normalized;
+          saveState();
+          renderTable();
+          alert("Course data imported successfully!");
         } catch (err) {
           alert("Invalid JSON file format.");
         }

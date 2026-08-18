@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Smart GradeIQ Pro</title>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -52,7 +53,7 @@
           <div class="header-actions">
             <button id="exportBtn" class="secondary-btn">Export Data</button>
             <button id="importBtn" class="secondary-btn">Import Data</button>
-            <input type="file" id="importFile" accept=".json" style="display: none;">
+            <input type="file" id="importFile" accept=".json" hidden>
           </div>
         </header>
 
@@ -206,7 +207,7 @@
           <!-- Configuration Card -->
           <div class="card">
             <h3>System Preferences</h3>
-            <form id="settingsForm" onsubmit="return false;">
+            <form id="settingsForm">
               <div class="form-group">
                 <label for="scaleType">Grading System Scale</label>
                 <select id="scaleType">
