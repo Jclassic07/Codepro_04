@@ -1,0 +1,18 @@
+{
+  "name": "codepro_04",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Smart GradeIQ Pro - GPA calculator and planner",
+  "main": "script.js",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "coverage": "vitest run --coverage"
+  },
+  "license": "ISC",
+  "devDependencies": {
+    "@vitest/coverage-v8": "^4.1.10",
+    "jsdom": "^26.1.0",
+    "vitest": "^4.1.10"
+  }
+}
