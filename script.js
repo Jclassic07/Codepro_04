@@ -1,4 +1,16 @@
 function initGradeIQ() {
+  const {
+    getGradeInfo,
+    parseStoredCourses,
+    uniqueSortedTerms,
+    filterByTerm,
+    computeAnalytics,
+    getStanding,
+    getInsight,
+    gradeDistribution,
+    computeRequiredGPA
+  } = window.GradeLogic;
+
   // Initial default course list
   const defaultCourses = [
     { id: "1", name: "Mathematics I", category: "Core", term: "Fall 2026", score: 88, credits: 3 },
@@ -50,8 +62,7 @@ function initGradeIQ() {
 
   function getStoredCourses() {
     try {
-      const stored = localStorage.getItem("gradeiq-courses");
-      return stored ? JSON.parse(stored) : null;
+      return parseStoredCourses(localStorage.getItem("gradeiq-courses"));
     } catch {
       return null;
     }
@@ -63,18 +74,10 @@ function initGradeIQ() {
     syncPlannerInputs();
   }
 
-  function getGradeInfo(score) {
-    if (score >= 90) return { grade: "A", gpa: 4.0 };
-    if (score >= 80) return { grade: "B", gpa: 3.0 };
-    if (score >= 70) return { grade: "C", gpa: 2.0 };
-    if (score >= 60) return { grade: "D", gpa: 1.0 };
-    return { grade: "F", gpa: 0.0 };
-  }
-
   function updateTermFilterOptions() {
     if (!termFilter) return;
     const selected = termFilter.value || "All";
-    const terms = [...new Set(courses.map((c) => c.term))].sort();
+    const terms = uniqueSortedTerms(courses);
     termFilter.innerHTML = `
       <option value="All">All Terms</option>
       ${terms
@@ -91,11 +94,7 @@ function initGradeIQ() {
   function renderTable() {
     if (!courseRows) return;
 
-    const selectedTerm = termFilter?.value || "All";
-    const filteredCourses =
-      selectedTerm === "All"
-        ? courses
-        : courses.filter((course) => course.term === selectedTerm);
+    const filteredCourses = filterByTerm(courses, termFilter?.value || "All");
 
     if (filteredCourses.length === 0) {
       courseRows.innerHTML = `
@@ -205,21 +204,7 @@ function initGradeIQ() {
   }
 
   function updateAnalytics() {
-    let totalWeightedScore = 0;
-    let totalWeightedGPA = 0;
-    let totalCredits = 0;
-    const counts = { A: 0, B: 0, C: 0, D: 0, F: 0 };
-
-    courses.forEach((c) => {
-      const info = getGradeInfo(c.score);
-      totalWeightedScore += c.score * c.credits;
-      totalWeightedGPA += info.gpa * c.credits;
-      totalCredits += c.credits;
-      counts[info.grade]++;
-    });
-
-    const avgScore = totalCredits > 0 ? totalWeightedScore / totalCredits : 0;
-    const cumulativeGPA = totalCredits > 0 ? totalWeightedGPA / totalCredits : 0;
+    const { counts, totalCredits, avgScore, cumulativeGPA } = computeAnalytics(courses);
 
     // Summary Strip
     document.getElementById("stripGPA").textContent = cumulativeGPA.toFixed(2);
@@ -227,16 +212,9 @@ function initGradeIQ() {
     document.getElementById("stripCredits").textContent = totalCredits;
 
     const standingEl = document.getElementById("stripStanding");
-    if (cumulativeGPA >= 3.5) {
-      standingEl.textContent = "Honors";
-      standingEl.style.color = "var(--success)";
-    } else if (cumulativeGPA >= 2.0) {
-      standingEl.textContent = "Good Standing";
-      standingEl.style.color = "var(--accent)";
-    } else {
-      standingEl.textContent = "At Risk";
-      standingEl.style.color = "var(--danger)";
-    }
+    const standing = getStanding(cumulativeGPA);
+    standingEl.textContent = standing.label;
+    standingEl.style.color = standing.color;
 
     // Analytics Tab
     document.getElementById("anaGPA").textContent = cumulativeGPA.toFixed(2);
@@ -246,9 +224,7 @@ function initGradeIQ() {
     const distContainer = document.getElementById("gradeDistribution");
     if (distContainer) {
       distContainer.innerHTML = "";
-      Object.keys(counts).forEach((grade) => {
-        const count = counts[grade];
-        const pct = courses.length > 0 ? (count / courses.length) * 100 : 0;
+      gradeDistribution(counts, courses.length).forEach(({ grade, count, pct }) => {
         distContainer.innerHTML += `
           <div class="dist-bar-item">
             <strong>${grade}</strong>
@@ -263,30 +239,13 @@ function initGradeIQ() {
 
     const insightEl = document.getElementById("smartInsightText");
     if (insightEl) {
-      if (courses.length === 0) {
-        insightEl.textContent = "No coursework entered yet. Add courses to generate personalized feedback.";
-      } else if (cumulativeGPA >= 3.5) {
-        insightEl.textContent = "🌟 Excellent academic performance! Maintain this consistency to graduate with Honors.";
-      } else if (cumulativeGPA >= 2.5) {
-        insightEl.textContent = "👍 Solid performance. Focus additional study effort on classes with lower percentage scores to raise your GPA.";
-      } else {
-        insightEl.textContent = "⚠️ Academic warning: Your cumulative GPA is low. Consider tutoring or academic counseling.";
-      }
+      insightEl.textContent = getInsight(courses.length, cumulativeGPA);
     }
   }
 
   function syncPlannerInputs() {
-    let totalWeightedGPA = 0;
-    let totalCredits = 0;
-
-    courses.forEach((c) => {
-      const info = getGradeInfo(c.score);
-      totalWeightedGPA += info.gpa * c.credits;
-      totalCredits += c.credits;
-    });
-
-    const currentGPA = totalCredits > 0 ? totalWeightedGPA / totalCredits : 0;
-    document.getElementById("planCurrentGPA").value = currentGPA.toFixed(2);
+    const { cumulativeGPA, totalCredits } = computeAnalytics(courses);
+    document.getElementById("planCurrentGPA").value = cumulativeGPA.toFixed(2);
     document.getElementById("planCurrentCredits").value = totalCredits;
   }
 
@@ -299,23 +258,25 @@ function initGradeIQ() {
       const remCredits = parseFloat(document.getElementById("planRemainingCredits").value) || 0;
       const outputEl = document.getElementById("targetOutput");
 
-      if (remCredits <= 0) {
+      const { status, neededGPA } = computeRequiredGPA({
+        currentGPA: curGPA,
+        currentCredits: curCredits,
+        targetGPA,
+        remainingCredits: remCredits
+      });
+
+      if (status === "invalid") {
         outputEl.innerHTML = `<p style="color:var(--danger)">Remaining credits must be greater than 0.</p>`;
         return;
       }
 
-      const targetPoints = targetGPA * (curCredits + remCredits);
-      const currentPoints = curGPA * curCredits;
-      const neededPoints = targetPoints - currentPoints;
-      const neededGPA = neededPoints / remCredits;
-
-      if (neededGPA > 4.0) {
+      if (status === "unattainable") {
         outputEl.innerHTML = `
           <h4 style="color:var(--danger)">Goal Unattainable</h4>
           <div class="target-highlight">${neededGPA.toFixed(2)}</div>
           <p>Required GPA exceeds maximum possible GPA (4.0). Try increasing future credit hours.</p>
         `;
-      } else if (neededGPA < 0) {
+      } else if (status === "achieved") {
         outputEl.innerHTML = `
           <h4 style="color:var(--success)">Goal Achieved!</h4>
           <div class="target-highlight">0.00</div>
