@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>User Directory</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <header class="page-header">
+      <div>
+        <h1>User Directory</h1>
+        <p>Browse team members fetched live from the JSONPlaceholder API.</p>
+      </div>
+      <div class="header-actions">
+        <button id="refreshBtn" class="secondary-btn" type="button">Refresh</button>
+      </div>
+    </header>
+
+    <div class="toolbar">
+      <div class="search-group">
+        <label class="sr-only" for="searchInput">Search users</label>
+        <input id="searchInput" type="search" placeholder="Search by name, username, email or company…" autocomplete="off">
+      </div>
+      <div class="filter-group">
+        <label for="sortSelect">Sort:</label>
+        <select id="sortSelect">
+          <option value="name">Name (A–Z)</option>
+          <option value="name-desc">Name (Z–A)</option>
+          <option value="company">Company</option>
+          <option value="city">City</option>
+        </select>
+      </div>
+      <span id="resultCount" class="result-count"></span>
+    </div>
+
+    <section id="statusPanel" class="status-panel" hidden>
+      <p id="statusText"></p>
+      <button id="retryBtn" class="primary-btn" type="button" hidden>Try Again</button>
+    </section>
+
+    <section id="skeletonGrid" class="user-grid" hidden aria-hidden="true">
+      <div class="user-card skeleton"></div>
+      <div class="user-card skeleton"></div>
+      <div class="user-card skeleton"></div>
+      <div class="user-card skeleton"></div>
+      <div class="user-card skeleton"></div>
+      <div class="user-card skeleton"></div>
+    </section>
+
+    <section id="userGrid" class="user-grid" aria-live="polite"></section>
+  </div>
+
+  <div id="detailBackdrop" class="modal-backdrop" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="detailName">
+      <button id="detailClose" class="modal-close" type="button" aria-label="Close details">&times;</button>
+      <div class="modal-head">
+        <div id="detailAvatar" class="avatar large"></div>
+        <div>
+          <h2 id="detailName"></h2>
+          <p id="detailUsername" class="muted"></p>
+        </div>
+      </div>
+      <dl id="detailList" class="detail-list"></dl>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
