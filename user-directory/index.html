@@ -18,38 +18,119 @@
       </div>
     </header>
 
-    <div class="toolbar">
-      <div class="search-group">
-        <label class="sr-only" for="searchInput">Search users</label>
-        <input id="searchInput" type="search" placeholder="Search by name, username, email or company…" autocomplete="off">
-      </div>
-      <div class="filter-group">
-        <label for="sortSelect">Sort:</label>
-        <select id="sortSelect">
-          <option value="name">Name (A–Z)</option>
-          <option value="name-desc">Name (Z–A)</option>
-          <option value="company">Company</option>
-          <option value="city">City</option>
-        </select>
-      </div>
-      <span id="resultCount" class="result-count"></span>
-    </div>
+    <nav class="page-nav" aria-label="Sections">
+      <button class="nav-btn active" type="button" data-page="directory">
+        <span class="icon">👥</span> Directory
+      </button>
+      <button class="nav-btn" type="button" data-page="companies">
+        <span class="icon">🏢</span> Companies
+      </button>
+      <button class="nav-btn" type="button" data-page="locations">
+        <span class="icon">📍</span> Locations
+      </button>
+      <button class="nav-btn" type="button" data-page="about">
+        <span class="icon">ℹ️</span> About
+      </button>
+    </nav>
 
-    <section id="statusPanel" class="status-panel" hidden>
-      <p id="statusText"></p>
-      <button id="retryBtn" class="primary-btn" type="button" hidden>Try Again</button>
+    <section id="directory" class="page active">
+      <div class="toolbar">
+        <div class="search-group">
+          <label class="sr-only" for="searchInput">Search users</label>
+          <input id="searchInput" type="search" placeholder="Search by name, username, email or company…" autocomplete="off">
+        </div>
+        <div class="filter-group">
+          <label for="sortSelect">Sort:</label>
+          <select id="sortSelect">
+            <option value="name">Name (A–Z)</option>
+            <option value="name-desc">Name (Z–A)</option>
+            <option value="company">Company</option>
+            <option value="city">City</option>
+          </select>
+        </div>
+        <span id="resultCount" class="result-count"></span>
+      </div>
+
+      <div id="statusPanel" class="status-panel" hidden>
+        <p id="statusText"></p>
+        <button id="retryBtn" class="primary-btn" type="button" hidden>Try Again</button>
+      </div>
+
+      <div id="skeletonGrid" class="user-grid" hidden aria-hidden="true">
+        <div class="user-card skeleton"></div>
+        <div class="user-card skeleton"></div>
+        <div class="user-card skeleton"></div>
+        <div class="user-card skeleton"></div>
+        <div class="user-card skeleton"></div>
+        <div class="user-card skeleton"></div>
+      </div>
+
+      <div id="userGrid" class="user-grid" aria-live="polite"></div>
     </section>
 
-    <section id="skeletonGrid" class="user-grid" hidden aria-hidden="true">
-      <div class="user-card skeleton"></div>
-      <div class="user-card skeleton"></div>
-      <div class="user-card skeleton"></div>
-      <div class="user-card skeleton"></div>
-      <div class="user-card skeleton"></div>
-      <div class="user-card skeleton"></div>
+    <section id="companies" class="page">
+      <div class="summary-strip">
+        <div class="strip-item">
+          <span class="label">Companies</span>
+          <span id="companyCount" class="value">0</span>
+        </div>
+        <div class="strip-item">
+          <span class="label">Largest Company</span>
+          <span id="largestCompany" class="value">–</span>
+        </div>
+        <div class="strip-item">
+          <span class="label">Avg. People / Company</span>
+          <span id="avgPerCompany" class="value">0</span>
+        </div>
+      </div>
+      <div id="companyGroups" class="group-list"></div>
     </section>
 
-    <section id="userGrid" class="user-grid" aria-live="polite"></section>
+    <section id="locations" class="page">
+      <div class="summary-strip">
+        <div class="strip-item">
+          <span class="label">Cities</span>
+          <span id="cityCount" class="value">0</span>
+        </div>
+        <div class="strip-item">
+          <span class="label">People Located</span>
+          <span id="locatedCount" class="value">0</span>
+        </div>
+      </div>
+      <div id="locationGroups" class="group-list"></div>
+    </section>
+
+    <section id="about" class="page">
+      <div class="card about-card">
+        <h3>About this app</h3>
+        <p>A dependency-free directory that fetches its data live from the public
+        JSONPlaceholder API and renders it entirely client-side — no build step,
+        no framework, no persisted state.</p>
+        <dl class="detail-list">
+          <div class="detail-row">
+            <dt>Endpoint</dt>
+            <dd><code>https://jsonplaceholder.typicode.com/users</code></dd>
+          </div>
+          <div class="detail-row">
+            <dt>Pages</dt>
+            <dd>Directory, Companies, Locations, About</dd>
+          </div>
+          <div class="detail-row">
+            <dt>Directory</dt>
+            <dd>Searchable, sortable card grid with a detail modal per person.</dd>
+          </div>
+          <div class="detail-row">
+            <dt>Companies / Locations</dt>
+            <dd>The same records grouped by <code>company.name</code> and
+            <code>address.city</code>, with aggregate counts.</dd>
+          </div>
+          <div class="detail-row">
+            <dt>Data loaded</dt>
+            <dd><span id="aboutLoaded">Not loaded yet</span></dd>
+          </div>
+        </dl>
+      </div>
+    </section>
   </div>
 
   <div id="detailBackdrop" class="modal-backdrop" hidden>

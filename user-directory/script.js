@@ -16,6 +16,16 @@ function initUserDirectory() {
   const detailName = document.getElementById("detailName");
   const detailUsername = document.getElementById("detailUsername");
   const detailList = document.getElementById("detailList");
+  const navButtons = Array.from(document.querySelectorAll(".nav-btn"));
+  const pages = Array.from(document.querySelectorAll(".page"));
+  const companyGroups = document.getElementById("companyGroups");
+  const locationGroups = document.getElementById("locationGroups");
+  const companyCount = document.getElementById("companyCount");
+  const largestCompany = document.getElementById("largestCompany");
+  const avgPerCompany = document.getElementById("avgPerCompany");
+  const cityCount = document.getElementById("cityCount");
+  const locatedCount = document.getElementById("locatedCount");
+  const aboutLoaded = document.getElementById("aboutLoaded");
 
   let users = [];
   let searchTerm = "";
@@ -138,6 +148,99 @@ function initUserDirectory() {
       .join("");
   }
 
+  function showPage(name) {
+    pages.forEach((page) => page.classList.toggle("active", page.id === name));
+    navButtons.forEach((button) =>
+      button.classList.toggle("active", button.dataset.page === name)
+    );
+    if (window.location.hash.slice(1) !== name) {
+      window.location.hash = name;
+    }
+  }
+
+  function groupBy(list, keyFor) {
+    const groups = new Map();
+    list.forEach((user) => {
+      const key = keyFor(user) || "Unknown";
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(user);
+    });
+    return [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  }
+
+  function renderGroups(container, groups, emptyLabel) {
+    if (groups.length === 0) {
+      container.innerHTML = `<p class="empty-state">${escapeHtml(emptyLabel)}</p>`;
+      return;
+    }
+
+    container.innerHTML = groups
+      .map(
+        ([key, members]) => `
+          <section class="group">
+            <header class="group-head">
+              <h3>${escapeHtml(key)}</h3>
+              <span class="company-badge">${members.length} ${
+                members.length === 1 ? "person" : "people"
+              }</span>
+            </header>
+            <ul class="group-members">
+              ${members
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map(
+                  (user) => `
+                    <li class="group-member" tabindex="0" role="button"
+                      data-id="${escapeHtml(user.id)}">
+                      <span class="avatar small">${escapeHtml(
+                        getInitials(user.name)
+                      )}</span>
+                      <span class="member-text">
+                        <strong>${escapeHtml(user.name)}</strong>
+                        <span class="muted">${escapeHtml(user.email)}</span>
+                      </span>
+                    </li>
+                  `
+                )
+                .join("")}
+            </ul>
+          </section>
+        `
+      )
+      .join("");
+  }
+
+  function renderCompanies() {
+    const groups = groupBy(users, (user) => user.company?.name);
+    renderGroups(companyGroups, groups, "No companies to show yet.");
+
+    companyCount.textContent = groups.length;
+    const biggest = groups.reduce(
+      (best, group) => (group[1].length > (best?.[1].length || 0) ? group : best),
+      null
+    );
+    largestCompany.textContent = biggest ? biggest[0] : "–";
+    avgPerCompany.textContent = groups.length
+      ? (users.length / groups.length).toFixed(1)
+      : "0";
+  }
+
+  function renderLocations() {
+    const groups = groupBy(users, (user) => user.address?.city);
+    renderGroups(locationGroups, groups, "No locations to show yet.");
+
+    cityCount.textContent = groups.length;
+    locatedCount.textContent = users.filter((user) => user.address?.city).length;
+  }
+
+  function renderAll() {
+    renderUsers();
+    renderCompanies();
+    renderLocations();
+    aboutLoaded.textContent = users.length
+      ? `${users.length} users loaded at ${new Date().toLocaleTimeString()}`
+      : "Not loaded yet";
+  }
+
   function openDetails(user) {
     detailAvatar.textContent = getInitials(user.name);
     detailName.textContent = user.name;
@@ -192,11 +295,11 @@ function initUserDirectory() {
       if (users.length === 0) {
         showStatus("The API returned no users.", true);
       }
-      renderUsers();
+      renderAll();
     } catch (error) {
       users = [];
       setLoading(false);
-      renderUsers();
+      renderAll();
       showStatus(`Could not load users: ${error.message}`, true);
     }
   }
@@ -217,6 +320,33 @@ function initUserDirectory() {
     if (user) openDetails(user);
   });
 
+  [companyGroups, locationGroups].forEach((container) => {
+    container.addEventListener("click", (event) => {
+      const member = event.target.closest(".group-member");
+      if (!member) return;
+      const user = users.find((item) => String(item.id) === member.dataset.id);
+      if (user) openDetails(user);
+    });
+
+    container.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      const member = event.target.closest(".group-member");
+      if (!member) return;
+      event.preventDefault();
+      const user = users.find((item) => String(item.id) === member.dataset.id);
+      if (user) openDetails(user);
+    });
+  });
+
+  navButtons.forEach((button) => {
+    button.addEventListener("click", () => showPage(button.dataset.page));
+  });
+
+  window.addEventListener("hashchange", () => {
+    const target = window.location.hash.slice(1);
+    if (pages.some((page) => page.id === target)) showPage(target);
+  });
+
   searchInput.addEventListener("input", (event) => {
     searchTerm = event.target.value;
     renderUsers();
@@ -234,6 +364,9 @@ function initUserDirectory() {
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") closeDetails();
   });
+
+  const initialPage = window.location.hash.slice(1);
+  showPage(pages.some((page) => page.id === initialPage) ? initialPage : "directory");
 
   loadUsers();
 }
