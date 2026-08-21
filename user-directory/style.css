@@ -39,7 +39,7 @@ body {
   width: 1px;
   height: 1px;
   overflow: hidden;
-  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
   white-space: nowrap;
 }
 
@@ -419,7 +419,7 @@ body {
   gap: 0.5rem;
   color: var(--text-muted);
   font-size: 0.85rem;
-  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .company-badge {
@@ -524,7 +524,7 @@ body {
 
 .detail-row dd {
   font-size: 0.9rem;
-  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 @media (max-width: 600px) {
